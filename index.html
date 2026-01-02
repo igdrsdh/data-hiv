@@ -3,24 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MedData HIV - RS Dian Husada</title>
-    <!-- Tailwind CSS CDN -->
+    <title>MedData HIV Cloud - RS Dian Husada</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
-                    fontFamily: {
-                        sans: ['Jost', 'Google Sans', 'sans-serif'],
-                    },
+                    fontFamily: { sans: ['Jost', 'Google Sans', 'sans-serif'] },
                 }
             }
         }
     </script>
     <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;700&family=Jost:wght@300;400;600;700&display=swap" rel="stylesheet">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -29,23 +25,40 @@
             .no-print { display: none !important; }
             .print-only { display: block !important; }
             body { background: white !important; color: black !important; }
-            .card-container { border: 1px solid #eee !important; box-shadow: none !important; background: white !important; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th { background-color: #f8f9fa !important; border-bottom: 2px solid #000 !important; }
-            td, th { border: 1px solid #ddd !important; padding: 12px !important; color: black !important; }
+            .card-item { border: 1px solid #eee !important; margin-bottom: 10px; padding: 10px; }
         }
         .print-only { display: none; }
-        
-        /* Smooth transition for theme switching */
-        .theme-transition {
-            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, shadow 0.3s ease;
-        }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-[#0f1113] text-slate-900 dark:text-slate-100 theme-transition">
+<body class="bg-slate-50 dark:bg-[#0f1113] text-slate-900 dark:text-slate-100 transition-colors duration-300">
     <div id="root"></div>
 
-    <!-- React and Babel CDNs -->
+    <!-- Firebase SDKs via CDN (ES Modules) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Konfigurasi Firebase Anda yang sudah dimasukkan
+        const firebaseConfig = {
+            apiKey: "AIzaSyA0HNTB7x7siB9Ps4cT5MRPhPSw7In5NaY",
+            authDomain: "data-pasien-hiv.firebaseapp.com",
+            projectId: "data-pasien-hiv",
+            storageBucket: "data-pasien-hiv.firebasestorage.app",
+            messagingSenderId: "770845270634",
+            appId: "1:770845270634:web:63e2f522a00d20534fe013"
+        };
+
+        // Inisialisasi
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Ekspor ke window agar bisa dipakai React
+        window.FB = { auth, db, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, signInAnonymously, onAuthStateChanged };
+    </script>
+
+    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -53,80 +66,75 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Custom Icon Component
         const Icon = ({ name, size = 20, className = "" }) => {
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            }, [name]);
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
         };
 
         const App = () => {
-            const [patients, setPatients] = useState(() => {
-                const saved = localStorage.getItem('hiv_patients_data');
-                return saved ? JSON.parse(saved) : [];
-            });
-            const [isDarkMode, setIsDarkMode] = useState(() => {
-                const savedTheme = localStorage.getItem('theme');
-                return savedTheme === 'dark';
-            });
+            const [user, setUser] = useState(null);
+            const [patients, setPatients] = useState([]);
+            const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [loading, setLoading] = useState(true);
+            const [formData, setFormData] = useState({ name: '', recordNumber: '', address: '', diagnosis: '', status: 'Aktif' });
             const [searchTerm, setSearchTerm] = useState('');
-            const [formData, setFormData] = useState({
-                name: '',
-                recordNumber: '',
-                address: '',
-                diagnosis: '',
-                status: 'Aktif'
-            });
 
             useEffect(() => {
-                localStorage.setItem('hiv_patients_data', JSON.stringify(patients));
-            }, [patients]);
+                const checkFB = setInterval(() => {
+                    if (window.FB) {
+                        clearInterval(checkFB);
+                        const { auth, signInAnonymously, onAuthStateChanged } = window.FB;
+                        
+                        signInAnonymously(auth).catch(console.error);
+                        onAuthStateChanged(auth, (u) => setUser(u));
+                    }
+                }, 100);
+            }, []);
 
             useEffect(() => {
-                if (isDarkMode) {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('theme', 'dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('theme', 'light');
-                }
+                if (!user || !window.FB) return;
+                const { db, collection, onSnapshot } = window.FB;
+
+                // Menggunakan path collection 'patients' di root atau sesuai struktur Anda
+                const q = collection(db, "patients");
+                
+                const unsubscribe = onSnapshot(q, (snapshot) => {
+                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setPatients(data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                    setLoading(false);
+                }, (err) => {
+                    console.error("Firestore Error:", err);
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [user]);
+
+            useEffect(() => {
+                if (isDarkMode) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
             }, [isDarkMode]);
 
-            const handleInputChange = (e) => {
-                const { name, value } = e.target;
-                setFormData(prev => ({ ...prev, [name]: value }));
-            };
-
-            const handleSubmit = (e) => {
+            const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (!formData.name || !formData.recordNumber) return;
-                
-                const newPatient = {
-                    ...formData,
-                    id: Date.now(),
-                    dateAdded: new Date().toLocaleDateString('id-ID')
-                };
-                
-                setPatients([newPatient, ...patients]);
-                setFormData({ name: '', recordNumber: '', address: '', diagnosis: '', status: 'Aktif' });
+                if (!user || !window.FB) return;
+                const { db, collection, addDoc } = window.FB;
+
+                try {
+                    await addDoc(collection(db, "patients"), {
+                        ...formData,
+                        createdAt: Date.now(),
+                        dateAdded: new Date().toLocaleDateString('id-ID')
+                    });
+                    setFormData({ name: '', recordNumber: '', address: '', diagnosis: '', status: 'Aktif' });
+                } catch (err) { alert("Gagal menyimpan ke Cloud: " + err.message); }
             };
 
-            const deletePatient = (id) => {
-                if(confirm('Apakah Anda yakin ingin menghapus data ini secara permanen?')) {
-                    setPatients(patients.filter(p => p.id !== id));
-                }
-            };
-
-            const toggleStatus = (id) => {
-                setPatients(patients.map(p => {
-                    if (p.id === id) {
-                        return { ...p, status: p.status === 'Aktif' ? 'Meninggal' : 'Aktif' };
-                    }
-                    return p;
-                }));
+            const handleDelete = async (id) => {
+                if (!confirm("Hapus data pasien ini?")) return;
+                const { db, doc, deleteDoc } = window.FB;
+                await deleteDoc(doc(db, "patients", id));
             };
 
             const filteredPatients = patients.filter(p => 
@@ -135,177 +143,85 @@
             );
 
             return (
-                <div className="min-h-screen theme-transition">
-                    {/* Navigation */}
-                    <nav className="no-print sticky top-0 z-50 backdrop-blur-md bg-white/80 dark:bg-[#1a1c1e]/80 border-b border-slate-200 dark:border-slate-800 px-6 py-4 theme-transition">
+                <div className="min-h-screen pb-10">
+                    <nav className="no-print sticky top-0 z-50 backdrop-blur-md bg-white/70 dark:bg-[#1a1c1e]/70 border-b border-slate-200 dark:border-slate-800 px-6 py-4">
                         <div className="max-w-7xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30">
-                                    <Icon name="layout-dashboard" size={24} />
+                                <div className="p-2 bg-blue-600 rounded-lg text-white shadow-lg shadow-blue-500/30">
+                                    <Icon name="activity" />
                                 </div>
-                                <span className="text-xl font-bold tracking-tight hidden sm:block text-slate-900 dark:text-white">Portal Data HIV</span>
+                                <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">RS Dian Husada</span>
                             </div>
-                            
-                            <div className="flex items-center gap-2">
-                                <button 
-                                    onClick={() => setIsDarkMode(!isDarkMode)}
-                                    className="p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-400"
-                                    title={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
-                                >
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
                                     {isDarkMode ? <Icon name="sun" className="text-yellow-400" /> : <Icon name="moon" className="text-blue-600" />}
                                 </button>
-                                <button 
-                                    onClick={() => window.print()}
-                                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-medium transition-all shadow-md active:scale-95"
-                                >
-                                    <Icon name="printer" size={18} />
-                                    <span className="hidden sm:inline">Cetak Laporan</span>
+                                <button onClick={() => window.print()} className="bg-slate-900 dark:bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                                    <Icon name="printer" size={16} /> Cetak
                                 </button>
                             </div>
                         </div>
                     </nav>
 
                     <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* Form Section */}
+                        {/* Form */}
                         <aside className="no-print lg:col-span-4">
-                            <div className="bg-white dark:bg-[#1e2124] p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 sticky top-24 theme-transition">
-                                <h2 className="text-2xl font-bold mb-2 flex items-center gap-3 text-slate-900 dark:text-white">
-                                    <span className="p-1 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded-lg"><Icon name="plus" size={24} /></span>
-                                    Input Data
+                            <div className="bg-white dark:bg-[#1e2124] p-6 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 sticky top-24">
+                                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                                    <Icon name="user-plus" className="text-blue-500" /> Tambah Pasien
                                 </h2>
-                                <div className="flex items-start gap-2 mb-8 text-xs text-slate-500 dark:text-slate-400 italic">
-                                    <Icon name="info" size={14} className="mt-0.5 shrink-0" />
-                                    <span>Aplikasi input data pasien terdiagnosa HIV di RS Dian Husada</span>
-                                </div>
-                                
-                                <form onSubmit={handleSubmit} className="space-y-5">
-                                    <div>
-                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Nama Pasien</label>
-                                        <div className="relative">
-                                            <Icon name="user" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="Nama lengkap..." className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">No. Rekam Medis (RM)</label>
-                                        <div className="relative">
-                                            <Icon name="hash" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input type="text" name="recordNumber" value={formData.recordNumber} onChange={handleInputChange} placeholder="RM-XXXXX" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Alamat Domisili</label>
-                                        <div className="relative">
-                                            <Icon name="map-pin" className="absolute left-4 top-4 text-slate-400" />
-                                            <textarea name="address" value={formData.address} onChange={handleInputChange} placeholder="Alamat lengkap..." rows="2" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required></textarea>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Hasil Diagnosa</label>
-                                        <div className="relative">
-                                            <Icon name="clipboard-list" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input type="text" name="diagnosis" value={formData.diagnosis} onChange={handleInputChange} placeholder="Contoh: Stadium 2" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Status Awal</label>
-                                        <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-6 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white appearance-none cursor-pointer theme-transition">
-                                            <option value="Aktif">Aktif</option>
-                                            <option value="Meninggal">Meninggal</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" className="w-full py-5 bg-slate-900 dark:bg-blue-600 text-white font-bold rounded-3xl hover:bg-slate-800 dark:hover:bg-blue-500 transition-all shadow-lg active:scale-95 mt-4">Simpan Data Pasien</button>
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <input type="text" placeholder="Nama Lengkap" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
+                                    <input type="text" placeholder="No. Rekam Medis" value={formData.recordNumber} onChange={e => setFormData({...formData, recordNumber: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
+                                    <textarea placeholder="Alamat Domisili" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" rows="2" required></textarea>
+                                    <input type="text" placeholder="Diagnosa (e.g. Stadium 1)" value={formData.diagnosis} onChange={e => setFormData({...formData, diagnosis: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
+                                    <button type="submit" disabled={!user} className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                                        {user ? 'Simpan ke Cloud' : 'Menghubungkan...'}
+                                    </button>
                                 </form>
                             </div>
                         </aside>
 
-                        {/* List Section */}
-                        <section className="lg:col-span-8">
-                            <div className="card-container bg-white dark:bg-[#1e2124] rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden theme-transition">
-                                <div className="no-print p-8 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6 theme-transition">
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Daftar Pasien</h2>
-                                        <p className="text-slate-500 dark:text-slate-400 text-sm">Terdata {patients.length} jiwa</p>
-                                    </div>
-                                    <div className="relative">
-                                        <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                        <input type="text" placeholder="Cari Nama/RM..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 pr-6 py-3 bg-slate-50 dark:bg-[#131517] border border-transparent focus:border-blue-500 rounded-2xl w-full md:w-64 outline-none text-slate-900 dark:text-white theme-transition" />
-                                    </div>
+                        {/* Table/List */}
+                        <section className="lg:col-span-8 space-y-4">
+                            <div className="no-print flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-[#1e2124] p-6 rounded-3xl border border-slate-200 dark:border-slate-800">
+                                <h2 className="font-bold text-lg">Data Pasien HIV ({patients.length})</h2>
+                                <div className="relative w-full md:w-64">
+                                    <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                    <input type="text" placeholder="Cari Nama/RM..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-[#131517] rounded-xl outline-none" />
                                 </div>
+                            </div>
 
-                                {/* Header khusus cetak */}
-                                <div className="print-only p-12 text-center">
-                                    <h1 className="text-3xl font-bold uppercase text-black">Laporan Rekapitulasi Pasien HIV</h1>
-                                    <h2 className="text-xl font-bold text-black mt-2">RS Dian Husada</h2>
-                                    <div className="h-0.5 bg-black w-full my-4"></div>
-                                    <p className="text-right italic">Tanggal Laporan: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
-                                </div>
+                            <div className="print-only text-center py-10">
+                                <h1 className="text-2xl font-bold">LAPORAN REKAPITULASI PASIEN HIV</h1>
+                                <p className="text-slate-500 italic">Dicetak: {new Date().toLocaleDateString('id-ID')}</p>
+                                <div className="h-0.5 bg-black w-full my-4"></div>
+                            </div>
 
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-slate-900 dark:text-slate-200">
-                                        <thead className="bg-slate-50 dark:bg-[#16191c] no-print theme-transition">
-                                            <tr>
-                                                <th className="px-8 py-5 text-left text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Pasien & Status</th>
-                                                <th className="px-8 py-5 text-left text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">No. RM</th>
-                                                <th className="px-8 py-5 text-left text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Diagnosa</th>
-                                                <th className="px-8 py-5 text-center text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider no-print">Aksi</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 theme-transition">
-                                            {filteredPatients.length > 0 ? filteredPatients.map((p) => (
-                                                <tr key={p.id} className={`theme-transition ${p.status === 'Meninggal' ? 'bg-slate-50/50 dark:bg-black/20 opacity-70' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}>
-                                                    <td className="px-8 py-6">
-                                                        <div className="flex flex-col">
-                                                            <span className={`font-bold text-lg leading-tight ${p.status === 'Meninggal' ? 'line-through text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white'}`}>{p.name}</span>
-                                                            <div className="flex items-center gap-2 mt-1.5">
-                                                                <button 
-                                                                    onClick={() => toggleStatus(p.id)} 
-                                                                    className={`no-print px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all ${
-                                                                        p.status === 'Aktif' 
-                                                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                                                                        : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                                                                    }`}
-                                                                >
-                                                                    {p.status}
-                                                                </button>
-                                                                <span className="print-only text-[10px] uppercase font-bold">{p.status}</span>
-                                                                <span className="text-[11px] text-slate-400 dark:text-slate-500">{p.dateAdded}</span>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-8 py-6">
-                                                        <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-sm tracking-wider">{p.recordNumber}</span>
-                                                    </td>
-                                                    <td className="px-8 py-6">
-                                                        <span className="px-3 py-1 bg-rose-50 text-rose-600 border border-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-900/50 rounded-full text-xs font-bold whitespace-nowrap">{p.diagnosis}</span>
-                                                    </td>
-                                                    <td className="px-8 py-6 text-center no-print">
-                                                        <button 
-                                                            onClick={() => deletePatient(p.id)} 
-                                                            className="p-2.5 text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all"
-                                                        >
-                                                            <Icon name="trash-2" size={18} />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            )) : (
-                                                <tr>
-                                                    <td colSpan="4" className="py-24 text-center">
-                                                        <Icon name="users" size={48} className="mx-auto text-slate-200 dark:text-slate-800 mb-4" />
-                                                        <p className="text-slate-400 dark:text-slate-600 italic">Belum ada data pasien yang terdaftar</p>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div className="grid grid-cols-1 gap-4">
+                                {loading ? (
+                                    <div className="p-20 text-center animate-pulse text-slate-400">Sinkronisasi Database Cloud...</div>
+                                ) : filteredPatients.length > 0 ? filteredPatients.map(p => (
+                                    <div key={p.id} className="card-item bg-white dark:bg-[#1e2124] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex justify-between items-center shadow-sm">
+                                        <div>
+                                            <div className="font-bold text-lg leading-tight">{p.name}</div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs font-mono bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded uppercase">{p.recordNumber}</span>
+                                                <span className="text-xs text-slate-400">{p.dateAdded}</span>
+                                            </div>
+                                            <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">{p.address}</div>
+                                            <div className="mt-2 inline-block px-3 py-1 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-[10px] font-bold uppercase tracking-wider">Diagnosa: {p.diagnosis}</div>
+                                        </div>
+                                        <button onClick={() => handleDelete(p.id)} className="no-print p-3 text-slate-300 hover:text-rose-500 transition-colors">
+                                            <Icon name="trash-2" size={20} />
+                                        </button>
+                                    </div>
+                                )) : (
+                                    <div className="py-20 text-center text-slate-400 italic">Belum ada data pasien</div>
+                                )}
                             </div>
                         </section>
                     </main>
-
-                    {/* Background Decorative Blur */}
-                    <div className="no-print fixed top-0 right-0 -z-10 w-[30rem] h-[30rem] bg-blue-500/5 dark:bg-blue-600/5 blur-[120px] rounded-full pointer-events-none"></div>
-                    <div className="no-print fixed bottom-0 left-0 -z-10 w-[30rem] h-[30rem] bg-indigo-500/5 dark:bg-indigo-600/5 blur-[120px] rounded-full pointer-events-none"></div>
                 </div>
             );
         };
