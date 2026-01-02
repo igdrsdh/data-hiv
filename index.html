@@ -6,6 +6,18 @@
     <title>MedData HIV - RS Dian Husada</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Jost', 'Google Sans', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,9 +25,6 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body {
-            font-family: 'Jost', 'Google Sans', sans-serif;
-        }
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
@@ -26,9 +35,14 @@
             td, th { border: 1px solid #ddd !important; padding: 12px !important; color: black !important; }
         }
         .print-only { display: none; }
+        
+        /* Smooth transition for theme switching */
+        .theme-transition {
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, shadow 0.3s ease;
+        }
     </style>
 </head>
-<body class="bg-[#f0f4f8] text-[#1a1c1e] transition-colors duration-300">
+<body class="bg-slate-50 dark:bg-[#0f1113] text-slate-900 dark:text-slate-100 theme-transition">
     <div id="root"></div>
 
     <!-- React and Babel CDNs -->
@@ -39,7 +53,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Custom Icon Component to wrap Lucide
+        // Custom Icon Component
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => {
                 if (window.lucide) {
@@ -54,7 +68,10 @@
                 const saved = localStorage.getItem('hiv_patients_data');
                 return saved ? JSON.parse(saved) : [];
             });
-            const [isDarkMode, setIsDarkMode] = useState(false);
+            const [isDarkMode, setIsDarkMode] = useState(() => {
+                const savedTheme = localStorage.getItem('theme');
+                return savedTheme === 'dark';
+            });
             const [searchTerm, setSearchTerm] = useState('');
             const [formData, setFormData] = useState({
                 name: '',
@@ -71,12 +88,10 @@
             useEffect(() => {
                 if (isDarkMode) {
                     document.documentElement.classList.add('dark');
-                    document.body.classList.replace('bg-[#f0f4f8]', 'bg-[#1a1c1e]');
-                    document.body.classList.add('text-[#e2e2e6]');
+                    localStorage.setItem('theme', 'dark');
                 } else {
                     document.documentElement.classList.remove('dark');
-                    document.body.classList.replace('bg-[#1a1c1e]', 'bg-[#f0f4f8]');
-                    document.body.classList.remove('text-[#e2e2e6]');
+                    localStorage.setItem('theme', 'light');
                 }
             }, [isDarkMode]);
 
@@ -120,27 +135,28 @@
             );
 
             return (
-                <div className="min-h-screen">
+                <div className="min-h-screen theme-transition">
                     {/* Navigation */}
-                    <nav className="no-print sticky top-0 z-50 backdrop-blur-md bg-white/70 dark:bg-[#1a1c1e]/70 border-b border-gray-200 dark:border-gray-800 px-6 py-4">
+                    <nav className="no-print sticky top-0 z-50 backdrop-blur-md bg-white/80 dark:bg-[#1a1c1e]/80 border-b border-slate-200 dark:border-slate-800 px-6 py-4 theme-transition">
                         <div className="max-w-7xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30">
                                     <Icon name="layout-dashboard" size={24} />
                                 </div>
-                                <span className="text-xl font-bold tracking-tight hidden sm:block">MedData HIV</span>
+                                <span className="text-xl font-bold tracking-tight hidden sm:block text-slate-900 dark:text-white">MedData HIV</span>
                             </div>
                             
                             <div className="flex items-center gap-2">
                                 <button 
                                     onClick={() => setIsDarkMode(!isDarkMode)}
-                                    className="p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                    className="p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-400"
+                                    title={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
                                 >
                                     {isDarkMode ? <Icon name="sun" className="text-yellow-400" /> : <Icon name="moon" className="text-blue-600" />}
                                 </button>
                                 <button 
                                     onClick={() => window.print()}
-                                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-medium transition-all shadow-md"
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-medium transition-all shadow-md active:scale-95"
                                 >
                                     <Icon name="printer" size={18} />
                                     <span className="hidden sm:inline">Cetak Laporan</span>
@@ -150,112 +166,135 @@
                     </nav>
 
                     <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* Form */}
+                        {/* Form Section */}
                         <aside className="no-print lg:col-span-4">
-                            <div className="bg-white dark:bg-[#2e3033] p-8 rounded-[40px] shadow-sm border border-gray-100 dark:border-gray-700 sticky top-24">
-                                <h2 className="text-2xl font-bold mb-2 flex items-center gap-3 text-gray-900 dark:text-white">
-                                    <span className="p-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-lg"><Icon name="plus" size={24} /></span>
+                            <div className="bg-white dark:bg-[#1e2124] p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 sticky top-24 theme-transition">
+                                <h2 className="text-2xl font-bold mb-2 flex items-center gap-3 text-slate-900 dark:text-white">
+                                    <span className="p-1 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded-lg"><Icon name="plus" size={24} /></span>
                                     Input Data
                                 </h2>
-                                <div className="flex items-start gap-2 mb-8 text-xs text-gray-500 dark:text-gray-400 italic">
+                                <div className="flex items-start gap-2 mb-8 text-xs text-slate-500 dark:text-slate-400 italic">
                                     <Icon name="info" size={14} className="mt-0.5 shrink-0" />
                                     <span>Aplikasi input data pasien terdiagnosa HIV di RS Dian Husada</span>
                                 </div>
                                 
                                 <form onSubmit={handleSubmit} className="space-y-5">
                                     <div>
-                                        <label className="text-sm font-semibold mb-2 block text-gray-500 dark:text-gray-400">Nama Pasien</label>
+                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Nama Pasien</label>
                                         <div className="relative">
-                                            <Icon name="user" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="Nama lengkap..." className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-[#1a1c1e] rounded-3xl border-2 border-transparent focus:border-blue-500 outline-none text-gray-900 dark:text-white" required />
+                                            <Icon name="user" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="Nama lengkap..." className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-semibold mb-2 block text-gray-500 dark:text-gray-400">No. Rekam Medis (RM)</label>
+                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">No. Rekam Medis (RM)</label>
                                         <div className="relative">
-                                            <Icon name="hash" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                            <input type="text" name="recordNumber" value={formData.recordNumber} onChange={handleInputChange} placeholder="Contoh: RM-00123" className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-[#1a1c1e] rounded-3xl border-2 border-transparent focus:border-blue-500 outline-none text-gray-900 dark:text-white" required />
+                                            <Icon name="hash" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input type="text" name="recordNumber" value={formData.recordNumber} onChange={handleInputChange} placeholder="RM-XXXXX" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-semibold mb-2 block text-gray-500 dark:text-gray-400">Alamat</label>
+                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Alamat Domisili</label>
                                         <div className="relative">
-                                            <Icon name="map-pin" className="absolute left-4 top-4 text-gray-400" />
-                                            <textarea name="address" value={formData.address} onChange={handleInputChange} placeholder="Alamat domisili..." rows="2" className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-[#1a1c1e] rounded-3xl border-2 border-transparent focus:border-blue-500 outline-none text-gray-900 dark:text-white" required></textarea>
+                                            <Icon name="map-pin" className="absolute left-4 top-4 text-slate-400" />
+                                            <textarea name="address" value={formData.address} onChange={handleInputChange} placeholder="Alamat lengkap..." rows="2" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required></textarea>
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-semibold mb-2 block text-gray-500 dark:text-gray-400">Diagnosa</label>
+                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Hasil Diagnosa</label>
                                         <div className="relative">
-                                            <Icon name="clipboard-list" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                            <input type="text" name="diagnosis" value={formData.diagnosis} onChange={handleInputChange} placeholder="e.g. Stadium 1" className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-[#1a1c1e] rounded-3xl border-2 border-transparent focus:border-blue-500 outline-none text-gray-900 dark:text-white" required />
+                                            <Icon name="clipboard-list" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input type="text" name="diagnosis" value={formData.diagnosis} onChange={handleInputChange} placeholder="Contoh: Stadium 2" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white theme-transition" required />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-semibold mb-2 block text-gray-500 dark:text-gray-400">Status</label>
-                                        <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-6 py-4 bg-gray-50 dark:bg-[#1a1c1e] rounded-3xl border-2 border-transparent focus:border-blue-500 outline-none text-gray-900 dark:text-white appearance-none cursor-pointer">
+                                        <label className="text-sm font-semibold mb-2 block text-slate-500 dark:text-slate-400 px-1">Status Awal</label>
+                                        <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-6 py-4 bg-slate-50 dark:bg-[#131517] rounded-3xl border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-black outline-none text-slate-900 dark:text-white appearance-none cursor-pointer theme-transition">
                                             <option value="Aktif">Aktif</option>
                                             <option value="Meninggal">Meninggal</option>
                                         </select>
                                     </div>
-                                    <button type="submit" className="w-full py-5 bg-[#001d35] dark:bg-blue-600 text-white font-bold rounded-3xl hover:bg-blue-800 transition-all shadow-lg active:scale-95">Simpan Data</button>
+                                    <button type="submit" className="w-full py-5 bg-slate-900 dark:bg-blue-600 text-white font-bold rounded-3xl hover:bg-slate-800 dark:hover:bg-blue-500 transition-all shadow-lg active:scale-95 mt-4">Simpan Data Pasien</button>
                                 </form>
                             </div>
                         </aside>
 
-                        {/* Table */}
+                        {/* List Section */}
                         <section className="lg:col-span-8">
-                            <div className="card-container bg-white dark:bg-[#2e3033] rounded-[40px] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                                <div className="no-print p-8 border-b border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="card-container bg-white dark:bg-[#1e2124] rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden theme-transition">
+                                <div className="no-print p-8 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6 theme-transition">
                                     <div>
-                                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Daftar Pasien</h2>
-                                        <p className="text-gray-500 text-sm">Total: {patients.length} Pasien</p>
+                                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Daftar Pasien</h2>
+                                        <p className="text-slate-500 dark:text-slate-400 text-sm">Terdata {patients.length} jiwa</p>
                                     </div>
                                     <div className="relative">
-                                        <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                        <input type="text" placeholder="Cari Nama/RM..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 pr-6 py-3 bg-gray-50 dark:bg-[#1a1c1e] rounded-2xl focus:ring-2 focus:ring-blue-500 w-full md:w-64 outline-none text-gray-900 dark:text-white" />
+                                        <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input type="text" placeholder="Cari Nama/RM..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 pr-6 py-3 bg-slate-50 dark:bg-[#131517] border border-transparent focus:border-blue-500 rounded-2xl w-full md:w-64 outline-none text-slate-900 dark:text-white theme-transition" />
                                     </div>
                                 </div>
 
+                                {/* Header khusus cetak */}
                                 <div className="print-only p-12 text-center">
-                                    <h1 className="text-3xl font-bold uppercase text-black">Laporan Rekapitulasi Pasien HIV - RS Dian Husada</h1>
-                                    <div className="h-1 bg-black w-full my-4"></div>
-                                    <p className="text-right italic">Dicetak: {new Date().toLocaleDateString('id-ID')}</p>
+                                    <h1 className="text-3xl font-bold uppercase text-black">Laporan Rekapitulasi Pasien HIV</h1>
+                                    <h2 className="text-xl font-bold text-black mt-2">RS Dian Husada</h2>
+                                    <div className="h-0.5 bg-black w-full my-4"></div>
+                                    <p className="text-right italic">Tanggal Laporan: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
                                 </div>
 
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-gray-900 dark:text-white">
-                                        <thead className="bg-gray-50 dark:bg-[#1a1c1e]/50 no-print">
+                                    <table className="w-full text-slate-900 dark:text-slate-200">
+                                        <thead className="bg-slate-50 dark:bg-[#16191c] no-print theme-transition">
                                             <tr>
-                                                <th className="px-8 py-5 text-left text-xs font-bold text-gray-400 uppercase">Pasien & Status</th>
-                                                <th className="px-8 py-5 text-left text-xs font-bold text-gray-400 uppercase">No. RM</th>
-                                                <th className="px-8 py-5 text-left text-xs font-bold text-gray-400 uppercase">Diagnosa</th>
-                                                <th className="px-8 py-5 text-center text-xs font-bold text-gray-400 uppercase no-print">Aksi</th>
+                                                <th className="px-8 py-5 text-left text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Pasien & Status</th>
+                                                <th className="px-8 py-5 text-left text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">No. RM</th>
+                                                <th className="px-8 py-5 text-left text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Diagnosa</th>
+                                                <th className="px-8 py-5 text-center text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider no-print">Aksi</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 theme-transition">
                                             {filteredPatients.length > 0 ? filteredPatients.map((p) => (
-                                                <tr key={p.id} className={`${p.status === 'Meninggal' ? 'bg-gray-50 dark:bg-black/10 opacity-75' : ''}`}>
+                                                <tr key={p.id} className={`theme-transition ${p.status === 'Meninggal' ? 'bg-slate-50/50 dark:bg-black/20 opacity-70' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}>
                                                     <td className="px-8 py-6">
                                                         <div className="flex flex-col">
-                                                            <span className={`font-bold text-lg ${p.status === 'Meninggal' ? 'line-through text-gray-500' : ''}`}>{p.name}</span>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <button onClick={() => toggleStatus(p.id)} className={`no-print px-2 py-0.5 rounded text-[10px] font-bold uppercase ${p.status === 'Aktif' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{p.status}</button>
+                                                            <span className={`font-bold text-lg leading-tight ${p.status === 'Meninggal' ? 'line-through text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white'}`}>{p.name}</span>
+                                                            <div className="flex items-center gap-2 mt-1.5">
+                                                                <button 
+                                                                    onClick={() => toggleStatus(p.id)} 
+                                                                    className={`no-print px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all ${
+                                                                        p.status === 'Aktif' 
+                                                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                                                        : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                                                                    }`}
+                                                                >
+                                                                    {p.status}
+                                                                </button>
                                                                 <span className="print-only text-[10px] uppercase font-bold">{p.status}</span>
-                                                                <span className="text-xs text-gray-400">{p.dateAdded}</span>
+                                                                <span className="text-[11px] text-slate-400 dark:text-slate-500">{p.dateAdded}</span>
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="px-8 py-6 font-mono font-bold text-blue-600 dark:text-blue-400">{p.recordNumber}</td>
                                                     <td className="px-8 py-6">
-                                                        <span className="px-3 py-1 bg-red-50 text-red-600 border border-red-100 dark:bg-red-900/20 dark:text-red-400 rounded-full text-xs font-bold">{p.diagnosis}</span>
+                                                        <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-sm tracking-wider">{p.recordNumber}</span>
+                                                    </td>
+                                                    <td className="px-8 py-6">
+                                                        <span className="px-3 py-1 bg-rose-50 text-rose-600 border border-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-900/50 rounded-full text-xs font-bold whitespace-nowrap">{p.diagnosis}</span>
                                                     </td>
                                                     <td className="px-8 py-6 text-center no-print">
-                                                        <button onClick={() => deletePatient(p.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Icon name="trash-2" /></button>
+                                                        <button 
+                                                            onClick={() => deletePatient(p.id)} 
+                                                            className="p-2.5 text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all"
+                                                        >
+                                                            <Icon name="trash-2" size={18} />
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             )) : (
-                                                <tr><td colSpan="4" className="py-20 text-center text-gray-400 italic">Data tidak ditemukan</td></tr>
+                                                <tr>
+                                                    <td colSpan="4" className="py-24 text-center">
+                                                        <Icon name="users" size={48} className="mx-auto text-slate-200 dark:text-slate-800 mb-4" />
+                                                        <p className="text-slate-400 dark:text-slate-600 italic">Belum ada data pasien yang terdaftar</p>
+                                                    </td>
+                                                </tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -263,6 +302,10 @@
                             </div>
                         </section>
                     </main>
+
+                    {/* Background Decorative Blur */}
+                    <div className="no-print fixed top-0 right-0 -z-10 w-[30rem] h-[30rem] bg-blue-500/5 dark:bg-blue-600/5 blur-[120px] rounded-full pointer-events-none"></div>
+                    <div className="no-print fixed bottom-0 left-0 -z-10 w-[30rem] h-[30rem] bg-indigo-500/5 dark:bg-indigo-600/5 blur-[120px] rounded-full pointer-events-none"></div>
                 </div>
             );
         };
