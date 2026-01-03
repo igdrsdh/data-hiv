@@ -25,21 +25,22 @@
             .no-print { display: none !important; }
             .print-only { display: block !important; }
             body { background: white !important; color: black !important; }
-            .card-item { border: 1px solid #eee !important; margin-bottom: 10px; padding: 10px; }
+            .card-item { border: 1px solid #eee !important; margin-bottom: 10px; padding: 10px; border-radius: 8px; }
         }
         .print-only { display: none; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#0f1113] text-slate-900 dark:text-slate-100 transition-colors duration-300">
     <div id="root"></div>
 
-    <!-- Firebase SDKs via CDN (ES Modules) -->
+    <!-- Firebase SDKs via CDN -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Konfigurasi Firebase Anda
+        // Konfigurasi Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyA0HNTB7x7siB9Ps4cT5MRPhPSw7In5NaY",
             authDomain: "data-pasien-hiv.firebaseapp.com",
@@ -49,13 +50,12 @@
             appId: "1:770845270634:web:63e2f522a00d20534fe013"
         };
 
-        // Inisialisasi
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Ekspor ke window agar bisa dipakai React
-        window.FB = { auth, db, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, signInAnonymously, onAuthStateChanged };
+        // Ekspor ke window untuk React
+        window.FB = { auth, db, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, signInWithEmailAndPassword, onAuthStateChanged, signOut };
     </script>
 
     <!-- React & Babel -->
@@ -73,28 +73,33 @@
 
         const App = () => {
             const [user, setUser] = useState(null);
+            const [authLoading, setAuthLoading] = useState(true);
+            const [authData, setAuthData] = useState({ email: '', password: '' });
+            const [isLoggingIn, setIsLoggingIn] = useState(false);
+            
             const [patients, setPatients] = useState([]);
             const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
             const [loading, setLoading] = useState(true);
             const [formData, setFormData] = useState({ name: '', recordNumber: '', address: '', diagnosis: '', status: 'Hidup' });
             const [searchTerm, setSearchTerm] = useState('');
 
+            // Cek status autentikasi saat load
             useEffect(() => {
                 const checkFB = setInterval(() => {
                     if (window.FB) {
                         clearInterval(checkFB);
-                        const { auth, signInAnonymously, onAuthStateChanged } = window.FB;
-                        
-                        signInAnonymously(auth).catch(console.error);
-                        onAuthStateChanged(auth, (u) => setUser(u));
+                        window.FB.onAuthStateChanged(window.FB.auth, (u) => {
+                            setUser(u);
+                            setAuthLoading(false);
+                        });
                     }
                 }, 100);
             }, []);
 
+            // Sinkronisasi data Firestore jika user login
             useEffect(() => {
                 if (!user || !window.FB) return;
                 const { db, collection, onSnapshot } = window.FB;
-
                 const q = collection(db, "patients");
                 
                 const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -109,17 +114,38 @@
                 return () => unsubscribe();
             }, [user]);
 
+            // Dark mode toggle
             useEffect(() => {
                 if (isDarkMode) document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
                 localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
             }, [isDarkMode]);
 
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setIsLoggingIn(true);
+                const { auth, signInWithEmailAndPassword } = window.FB;
+                try {
+                    await signInWithEmailAndPassword(auth, authData.email, authData.password);
+                } catch (err) {
+                    let msg = "Gagal masuk. Periksa email dan password.";
+                    if (err.code === 'auth/user-not-found') msg = "User tidak ditemukan.";
+                    if (err.code === 'auth/wrong-password') msg = "Password salah.";
+                    alert(msg);
+                } finally {
+                    setIsLoggingIn(false);
+                }
+            };
+
+            const handleLogout = () => {
+                if(confirm("Apakah Anda yakin ingin keluar?")) {
+                    window.FB.signOut(window.FB.auth);
+                }
+            };
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (!user || !window.FB) return;
                 const { db, collection, addDoc } = window.FB;
-
                 try {
                     await addDoc(collection(db, "patients"), {
                         ...formData,
@@ -127,14 +153,81 @@
                         dateAdded: new Date().toLocaleDateString('id-ID')
                     });
                     setFormData({ name: '', recordNumber: '', address: '', diagnosis: '', status: 'Hidup' });
-                } catch (err) { alert("Gagal menyimpan ke Cloud: " + err.message); }
+                } catch (err) {
+                    alert("Gagal menyimpan: " + err.message);
+                }
             };
 
             const handleDelete = async (id) => {
-                if (!confirm("Hapus data pasien ini?")) return;
-                const { db, doc, deleteDoc } = window.FB;
-                await deleteDoc(doc(db, "patients", id));
+                if (!confirm("Hapus data pasien ini? Data yang dihapus tidak dapat dikembalikan.")) return;
+                try {
+                    await window.FB.deleteDoc(window.FB.doc(window.FB.db, "patients", id));
+                } catch (err) {
+                    alert("Gagal menghapus: " + err.message);
+                }
             };
+
+            if (authLoading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center dark:bg-[#0f1113]">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+                            <p className="text-slate-500 font-medium">Memverifikasi Sesi...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Layar Login (Mode Registrasi Dihapus)
+            if (!user) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-100 dark:bg-[#0f1113]">
+                        <div className="bg-white dark:bg-[#1e2124] p-8 md:p-12 rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800">
+                            <div className="text-center mb-10">
+                                <div className="inline-block p-5 bg-blue-600 rounded-[2rem] text-white mb-6 shadow-2xl shadow-blue-500/40">
+                                    <Icon name="shield-check" size={40} />
+                                </div>
+                                <h1 className="text-2xl font-bold tracking-tight">Login MedData</h1>
+                                <p className="text-slate-500 text-sm mt-2">Masuk dengan akun institusi RS Dian Husada</p>
+                            </div>
+                            <form onSubmit={handleLogin} className="space-y-5">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Email Address</label>
+                                    <input 
+                                        type="email" 
+                                        placeholder="nama@rsdianhusada.com" 
+                                        value={authData.email} 
+                                        onChange={e => setAuthData({...authData, email: e.target.value})} 
+                                        className="w-full px-6 py-4 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none transition-all" 
+                                        required 
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Password</label>
+                                    <input 
+                                        type="password" 
+                                        placeholder="••••••••" 
+                                        value={authData.password} 
+                                        onChange={e => setAuthData({...authData, password: e.target.value})} 
+                                        className="w-full px-6 py-4 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none transition-all" 
+                                        required 
+                                    />
+                                </div>
+                                <button 
+                                    type="submit" 
+                                    disabled={isLoggingIn}
+                                    className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest text-sm mt-4 flex justify-center items-center gap-2"
+                                >
+                                    {isLoggingIn ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : "Masuk Sistem"}
+                                </button>
+                            </form>
+                            <div className="mt-8 text-center">
+                                <p className="text-xs text-slate-400">Hubungi IT Support jika Anda lupa password atau memerlukan akses baru.</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
 
             const filteredPatients = patients.filter(p => 
                 p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -143,109 +236,162 @@
 
             return (
                 <div className="min-h-screen pb-10">
+                    {/* Header/Nav */}
                     <nav className="no-print sticky top-0 z-50 backdrop-blur-md bg-white/70 dark:bg-[#1a1c1e]/70 border-b border-slate-200 dark:border-slate-800 px-6 py-4">
                         <div className="max-w-7xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 bg-blue-600 rounded-lg text-white shadow-lg shadow-blue-500/30">
+                                <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/20">
                                     <Icon name="activity" />
                                 </div>
-                                <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">RS Dian Husada</span>
+                                <div>
+                                    <span className="text-lg font-bold block leading-none">RS Dian Husada</span>
+                                    <span className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">HIV Cloud Portal</span>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
                                     {isDarkMode ? <Icon name="sun" className="text-yellow-400" /> : <Icon name="moon" className="text-blue-600" />}
                                 </button>
-                                <button onClick={() => window.print()} className="bg-slate-900 dark:bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
-                                    <Icon name="printer" size={16} /> Cetak
+                                <button onClick={() => window.print()} className="bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:opacity-80 transition-opacity">
+                                    <Icon name="printer" size={14} /> Cetak
+                                </button>
+                                <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                                <button onClick={handleLogout} className="p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-full transition-colors" title="Logout">
+                                    <Icon name="log-out" />
                                 </button>
                             </div>
                         </div>
                     </nav>
 
                     <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* Form */}
+                        {/* Form Input */}
                         <aside className="no-print lg:col-span-4">
-                            <div className="bg-white dark:bg-[#1e2124] p-6 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 sticky top-24">
-                                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                                    <Icon name="user-plus" className="text-blue-500" /> Tambah Pasien
+                            <div className="bg-white dark:bg-[#1e2124] p-7 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 sticky top-24">
+                                <h2 className="text-xl font-bold mb-8 flex items-center gap-3">
+                                    <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                                        <Icon name="user-plus" className="text-blue-500" />
+                                    </div>
+                                    Registrasi Pasien
                                 </h2>
-                                <form onSubmit={handleSubmit} className="space-y-4">
+                                <form onSubmit={handleSubmit} className="space-y-5">
                                     <div className="space-y-1">
-                                        <label className="text-xs font-bold text-slate-400 ml-1 uppercase">Nama</label>
-                                        <input type="text" placeholder="Nama Lengkap" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-wider">Nama Pasien</label>
+                                        <input type="text" placeholder="Nama Lengkap" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-wider">No. RM</label>
+                                            <input type="text" placeholder="RM-XXXX" value={formData.recordNumber} onChange={e => setFormData({...formData, recordNumber: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-wider">Status</label>
+                                            <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none appearance-none font-medium">
+                                                <option value="Hidup">Hidup</option>
+                                                <option value="Meninggal">Meninggal</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="text-xs font-bold text-slate-400 ml-1 uppercase">Rekam Medis</label>
-                                        <input type="text" placeholder="No. Rekam Medis" value={formData.recordNumber} onChange={e => setFormData({...formData, recordNumber: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-wider">Diagnosa Klinik</label>
+                                        <input type="text" placeholder="Stadium / Keterangan" value={formData.diagnosis} onChange={e => setFormData({...formData, diagnosis: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="text-xs font-bold text-slate-400 ml-1 uppercase">Alamat</label>
-                                        <textarea placeholder="Alamat Domisili" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" rows="2" required></textarea>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-wider">Alamat Lengkap</label>
+                                        <textarea placeholder="Alamat domisili saat ini" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" rows="3" required></textarea>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-slate-400 ml-1 uppercase">Diagnosa</label>
-                                        <input type="text" placeholder="E.g. Stadium 1" value={formData.diagnosis} onChange={e => setFormData({...formData, diagnosis: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none" required />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-slate-400 ml-1 uppercase">Status Pasien</label>
-                                        <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-5 py-3 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none appearance-none">
-                                            <option value="Hidup">Hidup</option>
-                                            <option value="Meninggal">Meninggal</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" disabled={!user} className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
-                                        {user ? 'Simpan ke Cloud' : 'Menghubungkan...'}
+                                    <button type="submit" className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all mt-4 uppercase text-xs tracking-[0.2em]">
+                                        Simpan ke Database
                                     </button>
                                 </form>
                             </div>
                         </aside>
 
-                        {/* Table/List */}
-                        <section className="lg:col-span-8 space-y-4">
-                            <div className="no-print flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-[#1e2124] p-6 rounded-3xl border border-slate-200 dark:border-slate-800">
-                                <h2 className="font-bold text-lg">Data Pasien HIV ({patients.length})</h2>
-                                <div className="relative w-full md:w-64">
-                                    <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                    <input type="text" placeholder="Cari Nama/RM..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-[#131517] rounded-xl outline-none" />
+                        {/* List Data Pasien */}
+                        <section className="lg:col-span-8 space-y-5">
+                            <div className="no-print flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-[#1e2124] p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800">
+                                <div>
+                                    <h2 className="font-bold text-lg">Database Pasien</h2>
+                                    <p className="text-xs text-slate-500">Total terdata: {patients.length} jiwa</p>
+                                </div>
+                                <div className="relative w-full md:w-72">
+                                    <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Cari Nama atau No. RM..." 
+                                        value={searchTerm} 
+                                        onChange={e => setSearchTerm(e.target.value)} 
+                                        className="w-full pl-12 pr-5 py-3 bg-slate-50 dark:bg-[#131517] rounded-2xl outline-none focus:ring-2 ring-blue-500/50 transition-all border border-transparent dark:border-slate-800" 
+                                    />
                                 </div>
                             </div>
 
-                            <div className="print-only text-center py-10">
-                                <h1 className="text-2xl font-bold uppercase tracking-widest">Laporan Rekapitulasi Pasien HIV</h1>
-                                <p className="text-slate-500 italic">RS DIAN HUSADA - Dicetak: {new Date().toLocaleDateString('id-ID')}</p>
-                                <div className="h-0.5 bg-black w-full my-4"></div>
+                            {/* Print Header */}
+                            <div className="print-only text-center mb-8 border-b-4 border-double border-black pb-4">
+                                <h1 className="text-3xl font-bold uppercase tracking-tighter">RS DIAN HUSADA</h1>
+                                <p className="text-sm font-bold mt-1">REKAPITULASI DATA PASIEN HIV/AIDS</p>
+                                <p className="text-xs mt-1">Dicetak pada: {new Date().toLocaleString('id-ID')}</p>
                             </div>
 
                             <div className="grid grid-cols-1 gap-4">
                                 {loading ? (
-                                    <div className="p-20 text-center animate-pulse text-slate-400">Sinkronisasi Database Cloud...</div>
-                                ) : filteredPatients.length > 0 ? filteredPatients.map(p => (
-                                    <div key={p.id} className={`card-item bg-white dark:bg-[#1e2124] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex justify-between items-center shadow-sm transition-opacity ${p.status === 'Meninggal' ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                                        <div>
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-3 h-3 rounded-full ${p.status === 'Hidup' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></div>
-                                                <div className={`font-bold text-lg leading-tight ${p.status === 'Meninggal' ? 'line-through decoration-slate-400 text-slate-400' : ''}`}>{p.name}</div>
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="text-xs font-mono bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded uppercase font-bold">{p.recordNumber}</span>
-                                                <span className="text-xs text-slate-400">{p.dateAdded}</span>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter ${p.status === 'Hidup' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'}`}>
-                                                    {p.status}
-                                                </span>
-                                            </div>
-                                            <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">{p.address}</div>
-                                            <div className="mt-2 inline-block px-3 py-1 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-[10px] font-bold uppercase tracking-wider">Diagnosa: {p.diagnosis}</div>
+                                    <div className="py-24 text-center">
+                                        <div className="inline-block animate-bounce p-3 bg-slate-100 dark:bg-slate-800 rounded-full mb-4">
+                                            <Icon name="cloud-download" className="text-blue-500" />
                                         </div>
-                                        <button onClick={() => handleDelete(p.id)} className="no-print p-3 text-slate-300 hover:text-rose-500 transition-colors">
-                                            <Icon name="trash-2" size={20} />
-                                        </button>
+                                        <p className="text-slate-400 italic">Sinkronisasi Cloud...</p>
+                                    </div>
+                                ) : filteredPatients.length > 0 ? filteredPatients.map(p => (
+                                    <div key={p.id} className={`card-item bg-white dark:bg-[#1e2124] p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800 flex justify-between items-center shadow-sm hover:shadow-md transition-all ${p.status === 'Meninggal' ? 'opacity-60 bg-slate-50 dark:bg-[#131517]' : ''}`}>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-3 h-3 rounded-full shadow-sm ${p.status === 'Hidup' ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-slate-400'}`}></div>
+                                                <div className={`font-bold text-xl leading-none ${p.status === 'Meninggal' ? 'line-through text-slate-500' : ''}`}>{p.name}</div>
+                                            </div>
+                                            
+                                            <div className="flex flex-wrap items-center gap-2 mt-4">
+                                                <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-blue-500/20">
+                                                    <Icon name="hash" size={10} /> {p.recordNumber}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                    <Icon name="stethoscope" size={10} /> {p.diagnosis}
+                                                </div>
+                                                <div className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${p.status === 'Hidup' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+                                                    {p.status}
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 flex gap-3">
+                                                <div className="mt-1"><Icon name="map-pin" size={14} className="text-slate-300" /></div>
+                                                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{p.address}</p>
+                                            </div>
+                                            
+                                            <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-800/50 flex items-center gap-2 text-[10px] text-slate-400">
+                                                <Icon name="calendar" size={10} /> Terinput pada {p.dateAdded}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="no-print flex flex-col gap-2 ml-4">
+                                            <button onClick={() => handleDelete(p.id)} className="p-3.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-2xl transition-all" title="Hapus Data">
+                                                <Icon name="trash-2" size={20} />
+                                            </button>
+                                        </div>
                                     </div>
                                 )) : (
-                                    <div className="py-20 text-center text-slate-400 italic">Belum ada data pasien</div>
+                                    <div className="py-24 text-center bg-white dark:bg-[#1e2124] rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
+                                        <div className="inline-block p-4 bg-slate-50 dark:bg-[#131517] rounded-full mb-4">
+                                            <Icon name="database-zap" className="text-slate-300" size={32} />
+                                        </div>
+                                        <p className="text-slate-400 font-medium">Data tidak ditemukan dalam database</p>
+                                    </div>
                                 )}
                             </div>
                         </section>
                     </main>
+                    
+                    {/* Print Footer */}
+                    <div className="print-only fixed bottom-0 left-0 right-0 text-[10px] text-center p-4 border-t border-slate-200">
+                        Halaman ini merupakan dokumen resmi RS Dian Husada. Segala bentuk penyalahgunaan data medis diatur dalam UU ITE dan UU Kesehatan.
+                    </div>
                 </div>
             );
         };
