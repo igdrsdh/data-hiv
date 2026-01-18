@@ -55,7 +55,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Export to window for React component
         window.FB = { auth, db, collection, doc, addDoc, deleteDoc, onSnapshot, query, orderBy, signInWithEmailAndPassword, onAuthStateChanged, signOut };
     </script>
 
@@ -98,19 +97,12 @@
 
             useEffect(() => {
                 if (!user || !window.FB) return;
-                const { db, collection, onSnapshot, query, orderBy } = window.FB;
-                
-                // Menggunakan query sederhana untuk menghindari error index
+                const { db, collection, onSnapshot } = window.FB;
                 const q = collection(db, "patients");
-                
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // Sort manual di memori (Rule 2: No Complex Queries)
                     setPatients(data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-                }, (err) => {
-                    console.error("Firestore Error:", err);
-                });
-
+                }, (err) => console.error("Firestore Error:", err));
                 return () => unsubscribe();
             }, [user]);
 
@@ -127,16 +119,13 @@
                 try {
                     await window.FB.signInWithEmailAndPassword(window.FB.auth, authData.email, authData.password);
                 } catch (err) {
-                    console.error(err);
-                    setErrorMessage("Gagal masuk. Periksa kembali email/password atau pastikan domain sudah diizinkan di Firebase Console.");
+                    setErrorMessage("Gagal masuk. Periksa kembali email/password.");
                 } finally {
                     setIsLoggingIn(false);
                 }
             };
 
-            const handleLogout = () => {
-                window.FB.signOut(window.FB.auth);
-            };
+            const handleLogout = () => window.FB.signOut(window.FB.auth);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -147,18 +136,14 @@
                         dateAdded: new Date().toLocaleDateString('id-ID')
                     });
                     setFormData({ name: '', recordNumber: '', address: '', diagnosis: '', status: 'Hidup' });
-                } catch (err) {
-                    alert("Gagal menyimpan data.");
-                }
+                } catch (err) { alert("Gagal menyimpan data."); }
             };
 
             const handleDelete = async (id) => {
                 if (!confirm("Hapus data pasien ini secara permanen?")) return;
                 try {
                     await window.FB.deleteDoc(window.FB.doc(window.FB.db, "patients", id));
-                } catch (err) {
-                    alert("Gagal menghapus data.");
-                }
+                } catch (err) { alert("Gagal menghapus data."); }
             };
 
             if (authLoading) return (
@@ -178,42 +163,12 @@
                                 <h1 className="text-2xl font-bold tracking-tight">Login MedData</h1>
                                 <p className="text-slate-500 text-sm mt-2">RS Dian Husada - HIV Cloud System</p>
                             </div>
-                            
-                            {errorMessage && (
-                                <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 text-xs rounded-xl border border-rose-100 dark:border-rose-800">
-                                    {errorMessage}
-                                </div>
-                            )}
-
+                            {errorMessage && <div className="mb-6 p-4 bg-rose-50 text-rose-600 text-xs rounded-xl border border-rose-100">{errorMessage}</div>}
                             <form onSubmit={handleLogin} className="space-y-5">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Email Address</label>
-                                    <input 
-                                        type="email" 
-                                        placeholder="staf@rsdianhusada.com" 
-                                        value={authData.email} 
-                                        onChange={e => setAuthData({...authData, email: e.target.value})} 
-                                        className="w-full px-6 py-4 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none transition-all" 
-                                        required 
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Password</label>
-                                    <input 
-                                        type="password" 
-                                        placeholder="••••••••" 
-                                        value={authData.password} 
-                                        onChange={e => setAuthData({...authData, password: e.target.value})} 
-                                        className="w-full px-6 py-4 rounded-2xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-2 ring-blue-500 outline-none transition-all" 
-                                        required 
-                                    />
-                                </div>
-                                <button 
-                                    type="submit" 
-                                    disabled={isLoggingIn}
-                                    className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest text-sm mt-4 flex justify-center items-center gap-2"
-                                >
-                                    {isLoggingIn ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : "Masuk Sistem"}
+                                <input type="email" placeholder="Email Address" value={authData.email} onChange={e => setAuthData({...authData, email: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-slate-50 dark:bg-[#131517] outline-none" required />
+                                <input type="password" placeholder="Password" value={authData.password} onChange={e => setAuthData({...authData, password: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-slate-50 dark:bg-[#131517] outline-none" required />
+                                <button type="submit" disabled={isLoggingIn} className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl">
+                                    {isLoggingIn ? "Memuat..." : "Masuk Sistem"}
                                 </button>
                             </form>
                         </div>
@@ -231,20 +186,20 @@
                     <nav className="no-print bg-white/70 dark:bg-[#1a1c1e]/70 border-b border-slate-200 dark:border-slate-800 px-6 py-3 shrink-0 backdrop-blur-md z-10">
                         <div className="max-w-7xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-3">
-                                <div className="bg-blue-600 p-2 rounded-lg text-white shadow-lg shadow-blue-500/20"><Icon name="activity" size={18} /></div>
+                                <div className="bg-blue-600 p-2 rounded-lg text-white"><Icon name="activity" size={18} /></div>
                                 <div>
                                     <span className="text-base font-bold block leading-none">RS Dian Husada</span>
                                     <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">HIV Cloud Database</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
                                     {isDarkMode ? <Icon name="sun" className="text-yellow-400" size={18} /> : <Icon name="moon" className="text-blue-600" size={18} />}
                                 </button>
-                                <button onClick={() => window.print()} className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-2 shadow-sm">
+                                <button onClick={() => window.print()} className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-2">
                                     <Icon name="printer" size={12} /> Cetak
                                 </button>
-                                <button onClick={handleLogout} className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-full transition-colors"><Icon name="log-out" size={18} /></button>
+                                <button onClick={handleLogout} className="p-2 text-rose-500"><Icon name="log-out" size={18} /></button>
                             </div>
                         </div>
                     </nav>
@@ -254,56 +209,69 @@
                             <div className="bg-white dark:bg-[#1e2124] p-6 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800">
                                 <h2 className="text-base font-bold mb-4 flex items-center gap-2"><Icon name="user-plus" className="text-blue-500" size={16} /> Registrasi Pasien</h2>
                                 <form onSubmit={handleSubmit} className="space-y-3">
-                                    <input type="text" placeholder="Nama Lengkap" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-1 ring-blue-500 outline-none text-xs" required />
+                                    <input type="text" placeholder="Nama Lengkap" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none text-xs" required />
                                     <div className="grid grid-cols-2 gap-2">
-                                        <input type="text" placeholder="No. Rekam Medis" value={formData.recordNumber} onChange={e => setFormData({...formData, recordNumber: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-1 ring-blue-500 outline-none text-xs" required />
-                                        <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-1 ring-blue-500 outline-none text-xs">
+                                        <input type="text" placeholder="No. Rekam Medis" value={formData.recordNumber} onChange={e => setFormData({...formData, recordNumber: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none text-xs" required />
+                                        <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none text-xs">
                                             <option value="Hidup">Hidup</option>
                                             <option value="Meninggal">Meninggal</option>
                                         </select>
                                     </div>
-                                    <input type="text" placeholder="Diagnosa" value={formData.diagnosis} onChange={e => setFormData({...formData, diagnosis: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-1 ring-blue-500 outline-none text-xs" required />
-                                    <textarea placeholder="Alamat Lengkap" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none focus:ring-1 ring-blue-500 outline-none text-xs" rows="2" required></textarea>
-                                    <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all uppercase text-[10px] tracking-widest mt-1 shadow-lg shadow-blue-500/20">Simpan Ke Cloud</button>
+                                    <input type="text" placeholder="Diagnosa" value={formData.diagnosis} onChange={e => setFormData({...formData, diagnosis: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none text-xs" required />
+                                    <textarea placeholder="Alamat Lengkap" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#131517] border-none text-xs" rows="2" required></textarea>
+                                    <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-[10px] uppercase tracking-widest mt-1">Simpan Ke Cloud</button>
                                 </form>
+
+                                {/* Total Pasien Widget */}
+                                <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-800">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-tighter">Total Terdaftar</span>
+                                        <Icon name="users" size={14} className="text-blue-500" />
+                                    </div>
+                                    <div className="text-2xl font-bold mt-1">{patients.length} <span className="text-[10px] font-normal text-slate-400">Pasien</span></div>
+                                </div>
                             </div>
                         </aside>
 
                         <section className="lg:col-span-8 flex flex-col h-full overflow-hidden">
-                            <div className="no-print bg-white dark:bg-[#1e2124] px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 mb-4 shrink-0">
-                                <Icon name="search" className="text-slate-400" size={14} />
-                                <input type="text" placeholder="Cari Pasien (Nama / No. RM)..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-transparent outline-none text-xs" />
+                            <div className="no-print flex items-center gap-4 mb-4">
+                                <div className="flex-1 bg-white dark:bg-[#1e2124] px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-3">
+                                    <Icon name="search" className="text-slate-400" size={14} />
+                                    <input type="text" placeholder="Cari Pasien (Nama / No. RM)..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-transparent outline-none text-xs" />
+                                </div>
+                                <div className="bg-blue-600 px-4 py-2.5 rounded-2xl text-white text-[10px] font-bold whitespace-nowrap">
+                                    {filteredPatients.length} Ditemukan
+                                </div>
                             </div>
 
                             <div className="print-only mb-6 border-b-2 border-black pb-4 text-center">
                                 <h1 className="text-2xl font-bold uppercase">RS Dian Husada</h1>
                                 <p className="text-xs">Laporan Data Pasien Terintegrasi - {new Date().toLocaleDateString('id-ID')}</p>
+                                <p className="text-[10px] mt-1 font-bold">Total Pasien: {filteredPatients.length}</p>
                             </div>
 
                             <div className="flex-1 overflow-y-auto custom-scroll pr-1 no-print">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
-                                    {filteredPatients.length > 0 ? filteredPatients.map(p => (
-                                        <div key={p.id} className={`bg-white dark:bg-[#1e2124] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between hover:border-blue-500/50 transition-all shadow-sm ${p.status === 'Meninggal' ? 'opacity-60 grayscale-[0.3]' : ''}`}>
+                                    {filteredPatients.length > 0 ? filteredPatients.map((p, idx) => (
+                                        <div key={p.id} className={`bg-white dark:bg-[#1e2124] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between hover:border-blue-500/50 transition-all shadow-sm ${p.status === 'Meninggal' ? 'opacity-60' : ''}`}>
                                             <div>
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="text-[10px] font-bold text-slate-300">#{filteredPatients.length - idx}</span>
                                                         <div className={`w-2 h-2 rounded-full shrink-0 ${p.status === 'Hidup' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></div>
-                                                        <span className="font-bold text-sm truncate">{p.name}</span>
+                                                        <span className="font-bold text-sm truncate uppercase">{p.name}</span>
                                                     </div>
                                                     <button onClick={() => handleDelete(p.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1"><Icon name="trash-2" size={14} /></button>
                                                 </div>
                                                 <div className="flex flex-wrap gap-1.5 mb-2">
-                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded-md text-[9px] font-bold border border-blue-100 dark:border-blue-800">{p.recordNumber}</span>
-                                                    <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300 rounded-md text-[9px] font-bold border border-rose-100 dark:border-rose-800 truncate max-w-[120px]">{p.diagnosis}</span>
+                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md text-[9px] font-bold border border-blue-100">{p.recordNumber}</span>
+                                                    <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 rounded-md text-[9px] font-bold border border-rose-100">{p.diagnosis}</span>
                                                 </div>
-                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 italic">{p.address}</p>
+                                                <p className="text-[10px] text-slate-500 line-clamp-1 italic">{p.address}</p>
                                             </div>
                                         </div>
                                     )) : (
-                                        <div className="col-span-full py-20 text-center">
-                                            <div className="text-slate-300 dark:text-slate-700 mb-2 flex justify-center"><Icon name="database" size={40} /></div>
-                                            <p className="text-slate-400 text-xs italic">Data tidak ditemukan</p>
-                                        </div>
+                                        <div className="col-span-full py-20 text-center"><p className="text-slate-400 text-xs italic">Data tidak ditemukan</p></div>
                                     )}
                                 </div>
                             </div>
@@ -312,6 +280,7 @@
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="border-b-2 border-slate-300 text-[10px] uppercase tracking-wider">
+                                            <th className="py-2 w-10">No.</th>
                                             <th className="py-2">No. RM</th>
                                             <th className="py-2">Nama Pasien</th>
                                             <th className="py-2">Diagnosa</th>
@@ -320,10 +289,11 @@
                                         </tr>
                                     </thead>
                                     <tbody className="text-[9px]">
-                                        {filteredPatients.map(p => (
+                                        {filteredPatients.map((p, index) => (
                                             <tr key={p.id} className="border-b border-slate-100">
+                                                <td className="py-2 text-center">{index + 1}</td>
                                                 <td className="py-2 font-bold">{p.recordNumber}</td>
-                                                <td className="py-2">{p.name}</td>
+                                                <td className="py-2 uppercase">{p.name}</td>
                                                 <td className="py-2">{p.diagnosis}</td>
                                                 <td className="py-2">{p.status}</td>
                                                 <td className="py-2">{p.address}</td>
@@ -331,6 +301,9 @@
                                         ))}
                                     </tbody>
                                 </table>
+                                <div className="mt-8 text-[9px] text-right">
+                                    Dicetak secara otomatis oleh Sistem MedData HIV Cloud pada {new Date().toLocaleString('id-ID')}
+                                </div>
                             </div>
                         </section>
                     </main>
